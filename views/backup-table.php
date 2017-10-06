@@ -26,20 +26,27 @@
         .positive {
             background-color: rgba(50, 200, 0, 0.5);
         }
+        hs:before{
+            content: attr(data-id);
+            color: grey;
+            border: 1px solid grey;
+            display: inline-block;
+            padding: 2px 5px;
+        }
     </style>
 </head>
 <body>
 
-<? if ($data = $backup[$_GET['date']]['data']): ?>
+<? if ($data = $backup[$_GET['date']]): ?>
     <table border="1" cellpadding="10" cellspacing="10">
-        <? foreach ($data['steps'] as $ask): ?>
+        <? foreach ($data['data']['steps'] as $ask): ?>
             <tr>
                 <td id="<?= $ask['id'] ?>">
                     <h3><?= $ask['title'] ?></h3>
                     <div class="description"><?= $ask['text'] ?></div>
                     <div class="buttons"><?= implode(' ', array_map(function ($row) {
                             return '<a href="#' . $row['target'] . '"><button class="' . $row['status'] . '">' . $row['condition'] . '</button></a>';
-                        }, array_filter($data['connections'], function ($row) use ($ask) {
+                        }, array_filter($data['data']['connections'], function ($row) use ($ask) {
                             return $ask['id'] == $row['source'];
                         }))); ?></div>
                 </td>
