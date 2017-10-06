@@ -8,14 +8,17 @@
 require_once __DIR__ . '/../core/server.php';
 
 $backup = getData() ?: [];
+$key = date('Y-m-d H:i');
 
-if (empty($backup[date('Y-m-d')])) {
-    $backup[date('Y-m-d')] = $_POST;
-
+if ($_POST && empty($backup[$key])) {
+    $backup[$key] = $_POST;
     $save = setData($backup);
+} elseif ($_GET['date']) {
+    require __DIR__ . '/../views/backup-table.php';
+    die;
 }
 
-
+header('Content-Type: application/json');
 echo json_encode([
     'result' => $save,
     'backups' => array_keys($backup),
