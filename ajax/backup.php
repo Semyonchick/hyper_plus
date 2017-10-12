@@ -10,9 +10,12 @@ require_once __DIR__ . '/../core/server.php';
 $backup = getData() ?: [];
 $key = date('Y-m-d H:i');
 
+$result = false;
 if ($_POST && empty($backup[$key])) {
     $backup[$key] = $_POST;
-    $save = setData($backup);
+    $result = setData($backup);
+} elseif ($_GET['restore']) {
+    $result = $backup[$_GET['restore']];
 } elseif ($_GET['date']) {
     require __DIR__ . '/../views/backup-table.php';
     die;
@@ -20,6 +23,6 @@ if ($_POST && empty($backup[$key])) {
 
 header('Content-Type: application/json');
 echo json_encode([
-    'result' => $save,
+    'result' => $result,
     'backups' => array_keys($backup),
 ]);
