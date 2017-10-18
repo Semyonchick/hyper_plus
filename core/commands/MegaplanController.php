@@ -38,35 +38,42 @@ class MegaplanController extends Controller
     public function actionIndex()
     {
         $list = $this->get('/BumsCrmApiV01/Contractor/list.api');
-        $fields = $this->get('/BumsCrmApiV01/Contractor/listFields.api');
 
-//        print_r($fields);
-
-        foreach($list as $client)
-            $this->addClient($client, $fields);
+        foreach ($list as $client)
+            $this->addClient($client);
     }
 
-    public function addClient($data, $fields){
+    public function addClient($data)
+    {
+        $data = $this->get('/BumsCrmApiV01/Contractor/card.api', ['Id' => $data['Id']]);
+
+        $list = $this->get('/BumsTradeApiV01/Deal/list.api', ['Contractor' => $data['Id']]);
+        foreach ($list as $lead)
+            $this->addLead($lead);
+
         print_r($data);
-        $data = $this->get('/BumsCrmApiV01/Contractor/card.api', ['Id'=>$data['Id'], 'RequestedFields', array_map(function($row){
-            return $row['Name'];
-        }, $fields)]);
+        die;
+    }
+
+    public function addLead($data)
+    {
+        $data = $this->get('/BumsTradeApiV01/Deal/card.api', ['Id' => $data['Id']]);
+
         print_r($data);
         die;
     }
 
     public function get($method, $params = null)
     {
-        $logLength = count($this->log);
-        if ($logLength > 3000) {
-            if ($this->log[$logLength - 3000] > time() - 3600) {
-                sleep(1);
-                return $this->get($method, $params);
-            }
+        $ll = count($this->log);
+        if (($ll > 3000 && ($spend = time() - $this->log[$ll - 3000]) && $spend < ($max = 3600)) ||
+            ($ll >= 3 && ($spend = microtime(true) - $this->log[$ll - 3]) && $spend < ($max = 1))
+        ) {
+            sleep($max - $spend);
+            return $this->get($method, $params);
         }
-        sleep(0.3);
 
-        $this->log[] = time();
+        $this->log[] = microtime(true);
         $result = $this->auth()->get($method, $params);
         if (is_string($result)) $result = json_decode($result);
         if ($result->status->code != 'ok') {
