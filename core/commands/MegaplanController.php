@@ -46,7 +46,7 @@ class MegaplanController extends Controller
 //        foreach ($list as $client)
 //            $this->addClient($client);
 
-        $list = $this->get('/BumsCrmApiV01/Contractor/list.api', ['Limit' => 100]);
+        $list = $this->get('/BumsCrmApiV01/Contractor/list.api');
 
         foreach ($list as $client)
             $this->addClient($client);
@@ -59,7 +59,7 @@ class MegaplanController extends Controller
             return $row['Contractor']['Id'] == $data['Id'];
         });
 
-        if (empty($list)) $object = 'lead';
+        if (empty($list) && empty($data['ParentCompany'])) $object = 'lead';
         elseif ($data['PersonType'] == 'human') $object = 'contact';
         else $object = 'company';
 
@@ -80,7 +80,7 @@ class MegaplanController extends Controller
                 "EMAIL" => [["VALUE" => $data['Email'], "VALUE_TYPE" => "WORK"]], // e-mail
                 "PHONE" => array_map(function ($row) {
                     return ["VALUE" => $row, "VALUE_TYPE" => "WORK"];
-                }, $data['Phones']), // Телефон
+                }, array_unique($data['Phones'])), // Телефон
                 "ADDRESS" => preg_replace('#<br[^>]*>#', "\n", implode(",\n ", array_map(function ($row) {
                     return $row['Address'];
                 }, array_diff_key($data['Locations'], ['', 'Адрес не указан'])))), // Адрес
@@ -204,6 +204,7 @@ class MegaplanController extends Controller
         $result = JSON::decode($result);
 
         if (!$result['result']) {
+            print_r($data);
             print_r($result);
             die;
         }
