@@ -18,6 +18,11 @@ $config = [
   'id' => 'console',
   'basePath' => __DIR__,
   'controllerNamespace' => 'app\commands',
+    'components' => [
+        'cache' => [
+            'class' => 'yii\caching\FileCache',
+        ],
+    ],
 ];
 
 $application = new yii\console\Application($config);
