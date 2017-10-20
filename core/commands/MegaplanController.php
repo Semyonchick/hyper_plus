@@ -62,7 +62,6 @@ class MegaplanController extends Controller
             $i += 500;
             foreach ($list as $client)
                 $this->addClient($client);
-            die;
         }
     }
 
@@ -223,8 +222,7 @@ class MegaplanController extends Controller
                     'IBLOCK_ID' => '41',
                     'ELEMENT_CODE' => $fileData['Url'],
                 ];
-                $result = $this->bx('lists.element.get', $params);
-                if (count($result)) continue;
+                if (count($this->bx('lists.element.get', $params))) continue;
 
                 try {
                     $result = $this->add('disk.storage.uploadfile', [
@@ -237,13 +235,13 @@ class MegaplanController extends Controller
                     Console::output($e->getMessage());
                     continue;
                 }
-                $this->add('lists.element.add', $params + [
-                        'FIELDS' => [
-                            'NAME' => current(explode('.', $fileData['Name'])),
-                            'PROPERTY_209' => [['VALUE' => 'n' . $result['ID']]],
-                            'PROPERTY_205' => [['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_'][$type] . $itemId],
-                        ],
-                    ]);
+
+                $params['FIELDS'] = [
+                    'NAME' => current(explode('.', $fileData['Name'])),
+                    'PROPERTY_209' => [['VALUE' => 'n' . $result['ID']]],
+                    'PROPERTY_205' => [['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_'][$type] . $itemId],
+                ];
+                $this->add('lists.element.add', $params);
             }
         }
     }
