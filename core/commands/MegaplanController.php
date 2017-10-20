@@ -151,35 +151,6 @@ class MegaplanController extends Controller
         foreach ($list as $lead) $this->addLead($result, $object, $lead);
     }
 
-    public function addAttaches($itemId, $type, $data)
-    {
-        if ($data && $type != 'lead') {
-            foreach ($data as $fileData) {
-                $params = [
-                    'IBLOCK_TYPE_ID' => 'lists',
-                    'IBLOCK_ID' => '41',
-                    'ELEMENT_CODE' => $fileData['Url'],
-                ];
-                $result = $this->bx('lists.element.get', $params);
-                if (count($result)) continue;
-
-                $result = $this->add('disk.storage.uploadfile', [
-                    'id' => 11,
-                    'data' => ['NAME' => $fileData['Name']],
-                    'fileContent' => base64_encode($this->auth()->get($fileData['Url'])),
-                ]);
-                $this->bx('disk.file.moveto', ['id' => $result['ID'], 'targetFolderId' => '671']);
-                $this->add('lists.element.add', $params + [
-                        'FIELDS' => [
-                            'NAME' => current(explode('.', $fileData['Name'])),
-                            'PROPERTY_209' => [['VALUE' => 'n' . $result['ID']]],
-                            'PROPERTY_205' => [['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_'][$type] . $itemId],
-                        ],
-                    ]);
-            }
-        }
-    }
-
     public function addLead($clientId, $object, $data)
     {
         $params = [
@@ -241,6 +212,40 @@ class MegaplanController extends Controller
         $this->addAttaches($result, 'deal', $data['Attaches']);
 
         return $result;
+    }
+
+    public function addAttaches($itemId, $type, $data)
+    {
+        if ($data && $type != 'lead') {
+            foreach ($data as $fileData) {
+                $params = [
+                    'IBLOCK_TYPE_ID' => 'lists',
+                    'IBLOCK_ID' => '41',
+                    'ELEMENT_CODE' => $fileData['Url'],
+                ];
+                $result = $this->bx('lists.element.get', $params);
+                if (count($result)) continue;
+
+                try {
+                    $result = $this->add('disk.storage.uploadfile', [
+                        'id' => 11,
+                        'data' => ['NAME' => $fileData['Name']],
+                        'fileContent' => [$fileData['FileName'], base64_encode($this->auth()->get($fileData['Url']))],
+                    ]);
+                    $this->bx('disk.file.moveto', ['id' => $result['ID'], 'targetFolderId' => '671']);
+                } catch (Exception $e) {
+                    Console::output($e->getMessage());
+                    continue;
+                }
+                $this->add('lists.element.add', $params + [
+                        'FIELDS' => [
+                            'NAME' => current(explode('.', $fileData['Name'])),
+                            'PROPERTY_209' => [['VALUE' => 'n' . $result['ID']]],
+                            'PROPERTY_205' => [['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_'][$type] . $itemId],
+                        ],
+                    ]);
+            }
+        }
     }
 
     public function addProducts($dealId, $data)
@@ -346,9 +351,8 @@ class MegaplanController extends Controller
 
         if (!isset($result['result'])) {
             print_r($url);
-            print_r($post);
-            print_r($result);
-            die;
+//            print_r($post);
+            throw new Exception(print_r($result, 1));
         }
 
         $this->bxLog[] = microtime(true);
