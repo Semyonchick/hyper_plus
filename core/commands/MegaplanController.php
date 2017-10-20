@@ -12,6 +12,7 @@ use Megaplan\SimpleClient\Client;
 use yii\console\Controller;
 use yii\console\Exception;
 use yii\helpers\ArrayHelper;
+use yii\helpers\Console;
 use yii\helpers\Json;
 
 /**
@@ -65,6 +66,21 @@ class MegaplanController extends Controller
         }
     }
 
+    public function actionDelete()
+    {
+        $delete = 0;
+        foreach (['lead', 'deal', 'contact', 'company'] as $object) {
+            foreach ($this->bx("crm.{$object}.list", ['filter' => ["ORIGINATOR_ID" => "megaplan"]]) as $row) {
+                if ($row['ORIGINATOR_ID'] == 'megaplan') {
+                    $this->bx("crm.{$object}.delete", ['id' => $row['ID']]);
+                    $delete++;
+                }
+            }
+        }
+        Console::output($delete);
+        if ($delete) $this->actionDelete();
+    }
+
     public function addClient($data)
     {
         $list = $this->get('/BumsTradeApiV01/Deal/list.api', ['FilterFields' => ['Contractor' => $data['Id']]]);
@@ -90,7 +106,9 @@ class MegaplanController extends Controller
                 'TITLE' => $data['Name'], // Название. Обязательное поле.
                 "POST" => "", // Должность
                 "COMMENTS" => nl2br(trim($data['Description'])), // Комментарии
-                "EMAIL" => [["VALUE" => $data['Email'], "VALUE_TYPE" => "WORK"]], // e-mail
+                "EMAIL" => array_map(function ($row) {
+                    return ["VALUE" => trim($row), "VALUE_TYPE" => "WORK"];
+                }, explode(',', $data['Email'])), // e-mail
                 "PHONE" => array_map(function ($row) {
                     return ["VALUE" => $row, "VALUE_TYPE" => "WORK"];
                 }, array_unique($data['Phones'])), // Телефон
@@ -135,10 +153,30 @@ class MegaplanController extends Controller
 
     public function addAttaches($itemId, $type, $data)
     {
-        if ($data) {
-//            print_r($itemId);
-//            print_r($data);
-//            die;
+        if ($data && $type != 'lead') {
+            foreach ($data as $fileData) {
+                $params = [
+                    'IBLOCK_TYPE_ID' => 'lists',
+                    'IBLOCK_ID' => '41',
+                    'ELEMENT_CODE' => $fileData['Url'],
+                ];
+                $result = $this->bx('lists.element.get', $params);
+                if (count($result)) continue;
+
+                $result = $this->add('disk.storage.uploadfile', [
+                    'id' => 11,
+                    'data' => ['NAME' => $fileData['Name']],
+                    'fileContent' => base64_encode($this->auth()->get($fileData['Url'])),
+                ]);
+                $this->bx('disk.file.moveto', ['id' => $result['ID'], 'targetFolderId' => '671']);
+                $this->add('lists.element.add', $params + [
+                        'FIELDS' => [
+                            'NAME' => current(explode('.', $fileData['Name'])),
+                            'PROPERTY_209' => [['VALUE' => 'n' . $result['ID']]],
+                            'PROPERTY_205' => [['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_'][$type] . $itemId],
+                        ],
+                    ]);
+            }
         }
     }
 
@@ -181,10 +219,10 @@ class MegaplanController extends Controller
                 $params['CLOSEDATE'] = $data['TimeUpdated'];
             }
             $params['TYPE_ID'] = $params['CATEGORY_ID'];
-            if ($params['CATEGORY_ID'] > 0) {
-                var_dump($params['CATEGORY_ID']);
-                die;
-            }
+//            if ($params['CATEGORY_ID'] > 0) {
+//                var_dump($params['CATEGORY_ID']);
+//                die;
+//            }
 
             if (!$params['STAGE_ID'] || $params['CATEGORY_ID'] === false) {
                 var_dump(1);
@@ -240,7 +278,7 @@ class MegaplanController extends Controller
             if (($ll > 3000 && ($spend = time() - $this->log[$ll - 3000]) && $spend < ($max = 3600)) ||
                 ($ll >= 3 && ($spend = microtime(true) - $this->log[$ll - 3]) && $spend < ($max = 1))
             ) {
-                sleep($max - $spend);
+                usleep (($max - $spend) * 1000000);
                 return $this->get($method, $params);
             }
 
@@ -273,21 +311,22 @@ class MegaplanController extends Controller
             'ORIGIN_ID' => $data['ORIGIN_ID']
         ]]);
 
-        if ($result['total']) return $result['result'][0]['ID'];
+        if (count($result)) return $result[0]['ID'];
 
         return false;
     }
 
     public function add($method, $data)
     {
-        if (!$data['id']) $data = ['fields' => $data, 'params' => ['REGISTER_SONET_EVENT' => 'N']];
+        if (!$data['id'] && !$data['IBLOCK_ID']) $data = ['fields' => $data, 'params' => ['REGISTER_SONET_EVENT' => 'N']];
         return $this->bx($method, [], $data);
     }
 
     public function bx($method, $get = null, $post = null)
     {
-        if ((count($this->bxLog) > 2 && ($spend = microtime(true) - $this->bxLog[count($this->bxLog) - 2]) && $spend < 1)) {
-            sleep(1 - $spend);
+        $cl = count($this->bxLog);
+        if ($cl > 2 && ($spend = microtime(true) - $this->bxLog[$cl - 2]) && $spend < 1) {
+            usleep ((1 - $spend) * 1000000);
             return $this->bx($method, $get, $post);
         }
 
@@ -305,14 +344,14 @@ class MegaplanController extends Controller
 
         $result = JSON::decode($result);
 
-        if (!$result['result']) {
+        if (!isset($result['result'])) {
             print_r($url);
             print_r($post);
             print_r($result);
             die;
         }
 
-        $this->bxLog = microtime(true);
+        $this->bxLog[] = microtime(true);
 
         return $result['result'];
     }
