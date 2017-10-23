@@ -46,7 +46,7 @@ class MegaplanController extends Controller
         'PREPARATION' => ['Отложено', 'Заказ', 'Коммерческое предложение', 'Договор', 'Договор', 'Подписание договора', 'Комиссия подтверждена', 'Оформление заказа'],
         'PREPAYMENT_INVOICE' => ['Заказ подтверждён', 'Заказ подтверждён', 'Оплачено', 'Предоплата', 'Окончательные расчеты', 'Комиссия получена'],
         'EXECUTING' => ['Отгрузили', 'Услуги оказываются', 'Приемка', 'Устранение замечаний', 'Выполнение работ', 'Отправили счет-фактуру'],
-        'FINAL_INVOICE' => ['Постоплата'],
+        'FINAL_INVOICE' => ['Постоплата', 'Внесение остатка за аренду'],
         'WON' => ['Услуги оказаны', 'Закрыто', 'Постоплата', 'Устранение замечаний', 'Завершена'],
         'LOSE' => ['Отказ', 'Отвал'],
     ];
@@ -55,7 +55,7 @@ class MegaplanController extends Controller
     private $bxLog = [];
     private $auth = [];
 
-    public function actionIndex()
+    public function actionIndex($skipErrors = true)
     {
         Console::output(PHP_EOL . '-');
         $remember = \Yii::$app->cache->get('parseHistory');
@@ -64,12 +64,23 @@ class MegaplanController extends Controller
             Console::output('/Offset ' . $i);
             foreach ($list as $key => $client) if ($i + $key > $remember) {
                 Console::output(($i + $key) . ': ' . $client['Name']);
-                $this->addClient($client);
+                if ($skipErrors) $this->skip('addClient', $client);
+                else $this->addClient($client);
                 \Yii::$app->cache->set('parseHistory', $i + $key, 3600000);
             }
             $i += count($list);
         }
         Console::output('Обработано ' . ($i-500 + $key) . ' контактов. Обработка заверешена.');
+    }
+
+    public function skip($method, $data)
+    {
+        try {
+            $this->$method($data);
+        } catch (Exception $e) {
+            Console::error('ERROR: ' . $e->getCode() . ' ' . $e->getMessage());
+            $this->skip($method, $data);
+        }
     }
 
     public function actionDelete()
@@ -257,6 +268,7 @@ class MegaplanController extends Controller
         if ($data) {
             $rows = [];
             foreach ($data as $row) {
+                if(empty($row['Offer']) || empty($row['DeclaredPrice'])) continue;
                 $rows[] = [
                     'PRODUCT_ID' => 0,
                     'OWNER_ID' => 0,
