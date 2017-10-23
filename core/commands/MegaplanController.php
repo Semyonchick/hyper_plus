@@ -66,9 +66,9 @@ class MegaplanController extends Controller
                 $this->addClient($client);
                 \Yii::$app->cache->set('parseHistory', $i + $key, 3600000);
             }
-            $i += 500;
+            $i += count($list);
         }
-        Console::output('Обработано ' . ($i + $key) . ' контактов. Обработка заверешена.');
+        Console::output('Обработано ' . ($i-500 + $key) . ' контактов. Обработка заверешена.');
     }
 
     public function actionDelete()
