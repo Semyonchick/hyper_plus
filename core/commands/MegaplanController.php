@@ -57,12 +57,13 @@ class MegaplanController extends Controller
 
     public function actionIndex()
     {
+        Console::output(PHP_EOL . '-');
         $remember = \Yii::$app->cache->get('parseHistory');
         $i = $remember ?: 0;
         while (($list = $this->get('/BumsCrmApiV01/Contractor/list.api', ['Offset' => $i])) && count($list)) {
-            Console::output('Offset ' . $i);
+            Console::output('/Offset ' . $i);
             foreach ($list as $key => $client) if ($i + $key > $remember) {
-                Console::output($client['Name'] . ' ' . ($i + $key));
+                Console::output(($i + $key) . ': ' . $client['Name']);
                 $this->addClient($client);
                 \Yii::$app->cache->set('parseHistory', $i + $key, 3600000);
             }
@@ -89,9 +90,9 @@ class MegaplanController extends Controller
     public function addClient($data)
     {
         $list = $this->get('/BumsTradeApiV01/Deal/list.api', ['FilterFields' => ['Contractor' => $data['Id']]]);
-        $list = array_filter($list, function ($row) use ($data) {
-            return $row['Contractor']['Id'] == $data['Id'];
-        });
+//        $list = array_filter($list, function ($row) use ($data) {
+//            return $row['Contractor']['Id'] == $data['Id'];
+//        });
 
         if (empty($list) && empty($data['ParentCompany'])) $object = 'lead';
         elseif ($data['PersonType'] == 'human') $object = 'contact';
@@ -151,9 +152,9 @@ class MegaplanController extends Controller
             $result = $this->add('crm.' . $object . '.add', $params);
         }
 
-        $this->addAttaches($result, $object, $data['Attaches']);
-
         foreach ($list as $lead) $this->addLead($result, $object, $lead);
+
+        $this->addAttaches($result, $object, $data['Attaches']);
     }
 
     public function addLead($clientId, $object, $data)
@@ -210,7 +211,6 @@ class MegaplanController extends Controller
 
             $result = $this->add('crm.deal.add', $params);
         }
-
 
         $this->addProducts($result, $data['Positions']);
 
@@ -353,15 +353,21 @@ class MegaplanController extends Controller
         $url .= $method . '/';
         if ($get) $url .= '?' . http_build_query($get);
 
-        $curl = new Curl();
-        if ($post) {
-            $curl->setPostParams($post);
-            $result = $curl->post($this->url . '' . $method . '/', true);
-        } else {
-            $result = $curl->get($url);
-        }
+        try {
+            $curl = new Curl();
+            if ($post) {
+                $curl->setPostParams($post);
+                $result = $curl->post($this->url . '' . $method . '/', true);
+            } else {
+                $result = $curl->get($url);
+            }
 
-        $result = JSON::decode($result);
+            $result = JSON::decode($result);
+        } catch (Exception $e){
+            Console::output('bitrix error');
+            sleep(1);
+            return $this->bx($method, $get, $post);
+        }
 
         if (!isset($result['result'])) {
             print_r($url);
