@@ -43,7 +43,7 @@ class MegaplanController extends Controller
     ];
     public $statusMap = [
         'NEW' => ['Интерес', 'Запрос', 'Начало сделки'],
-        'PREPARATION' => ['Отложено', 'Заказ', 'Коммерческое предложение', 'Договор', 'Комиссия подтверждена', 'Оформление заказа'],
+        'PREPARATION' => ['Отложено', 'Заказ', 'Коммерческое предложение', 'Договор', 'Договор', 'Подписание договора', 'Комиссия подтверждена', 'Оформление заказа'],
         'PREPAYMENT_INVOICE' => ['Заказ подтверждён', 'Заказ подтверждён', 'Оплачено', 'Предоплата', 'Окончательные расчеты', 'Комиссия получена'],
         'EXECUTING' => ['Отгрузили', 'Услуги оказываются', 'Приемка', 'Устранение замечаний', 'Выполнение работ', 'Отправили счет-фактуру'],
         'FINAL_INVOICE' => ['Постоплата'],
@@ -57,12 +57,18 @@ class MegaplanController extends Controller
 
     public function actionIndex()
     {
-        $i = 0;
+        $remember = \Yii::$app->cache->get('parseHistory');
+        $i = $remember ?: 0;
         while (($list = $this->get('/BumsCrmApiV01/Contractor/list.api', ['Offset' => $i])) && count($list)) {
-            $i += 500;
-            foreach ($list as $client)
+            Console::output('Offset ' . $i);
+            foreach ($list as $key => $client) if ($i + $key > $remember) {
+                Console::output($client['Name'] . ' ' . ($i + $key));
                 $this->addClient($client);
+                \Yii::$app->cache->set('parseHistory', $i + $key, 3600000);
+            }
+            $i += 500;
         }
+        Console::output('Обработано ' . ($i + $key) . ' контактов. Обработка заверешена.');
     }
 
     public function actionDelete()
@@ -106,7 +112,7 @@ class MegaplanController extends Controller
                 "POST" => "", // Должность
                 "COMMENTS" => nl2br(trim($data['Description'])), // Комментарии
                 "EMAIL" => array_map(function ($row) {
-                    return ["VALUE" => trim($row), "VALUE_TYPE" => "WORK"];
+                    return ["VALUE" => str_replace('í', 'i', trim($row)), "VALUE_TYPE" => "WORK"];
                 }, explode(',', $data['Email'])), // e-mail
                 "PHONE" => array_map(function ($row) {
                     return ["VALUE" => $row, "VALUE_TYPE" => "WORK"];
@@ -286,9 +292,19 @@ class MegaplanController extends Controller
             }
 
             $this->log[] = microtime(true);
-            $result = $this->auth()->get($method, $params);
+
+            try {
+                $result = $this->auth()->get($method, $params);
+            } catch (Exception $e) {
+                sleep(1);
+                Console::output('сбой мегаплан');
+                return $this->get($method, $params);
+            }
+
+
             if (is_string($result)) $result = json_decode($result);
             if ($result->status->code != 'ok') {
+                print_r($result);
                 throw new Exception($result->status->message);
             }
 
@@ -349,7 +365,7 @@ class MegaplanController extends Controller
 
         if (!isset($result['result'])) {
             print_r($url);
-//            print_r($post);
+            print_r($post);
             throw new Exception(print_r($result, 1));
         }
 
