@@ -124,7 +124,7 @@ class MegaplanController extends Controller
                 "POST" => "", // Должность
                 "COMMENTS" => nl2br(trim($data['Description'])), // Комментарии
                 "EMAIL" => array_map(function ($row) {
-                    return ["VALUE" => str_replace('í', 'i', trim($row)), "VALUE_TYPE" => "WORK"];
+                    return ["VALUE" => trim($row), "VALUE_TYPE" => "WORK"];
                 }, explode(',', $data['Email'])), // e-mail
                 "PHONE" => array_map(function ($row) {
                     return ["VALUE" => $row, "VALUE_TYPE" => "WORK"];
