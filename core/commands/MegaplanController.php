@@ -13,7 +13,6 @@ use yii\console\Controller;
 use yii\console\Exception;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Console;
-use yii\helpers\Json;
 
 /**
  * @author Qiang Xue <qiang.xue@gmail.com>
@@ -36,6 +35,7 @@ class MegaplanController extends Controller
         1000017 => 51,
         1000033 => 59,
     ];
+    public $bxTypesMap = ['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_', 'lead' => 'L_'];
     public $categoryMap = [
         ['Продажа наших услуг', 'Аренда недвижимости', 'Продажа рекламы', 'Базовая'],
         ['Получение комиссии'],
@@ -61,7 +61,7 @@ class MegaplanController extends Controller
         $remember = \Yii::$app->cache->get('parseHistory');
         $i = $remember ?: 0;
         while (($list = $this->get('/BumsCrmApiV01/Contractor/list.api', ['Offset' => $i])) && count($list)) {
-            Console::output('/Offset ' . $i);
+            Console::output('/Offset ' . $i . ':' . count($list));
             foreach ($list as $key => $client) if ($i + $key > $remember) {
                 Console::output(($i + $key) . ': ' . $client['Name']);
                 if ($skipErrors) $this->skip('addClient', $client);
@@ -71,6 +71,59 @@ class MegaplanController extends Controller
             $i += count($list);
         }
         Console::output('Обработано ' . ($i-500 + $key) . ' контактов. Обработка заверешена.');
+    }
+
+    public function actionCsv()
+    {
+        $remember = \Yii::$app->cache->get('csvCommentHistory');
+        $i = 0;
+        $headers = [];
+        if (($handle = fopen(\Yii::getAlias('@app/../data/comment_201710271105.csv'), "r")) !== false) {
+            while (($data = fgetcsv($handle, 0, ",")) !== false) {
+                if (!$headers) $headers = $data;
+                else {
+                    $i++;
+                    if ($i < $remember) continue;
+                    $data = array_combine($headers, $data);
+
+                    $params = [
+                        'IBLOCK_TYPE_ID' => 'lists',
+                        'IBLOCK_ID' => 55,
+                        'ELEMENT_CODE' => $data['comment_id'],
+                    ];
+                    Console::output("{$i}: {$data['comment_id']}");
+
+                    $row = $this->bx('lists.element.get', $params);
+                    if (!$row) {
+                        $crmId = str_replace(',', '', $data['subject_id']);
+
+                        $types = ['lead', 'contact', 'company'];
+                        if ($crmId < 1000000) array_unshift($types, 'deal');
+
+                        $bitrixId = false;
+                        foreach ($types as $object) if (!$bitrixId) {
+                            $bitrixId = $this->exist('crm.' . $object . '.list', [
+                                "ORIGINATOR_ID" => "megaplan", // Идентификатор внешней информационной базы
+                                "ORIGIN_ID" => $crmId, // Внешний ключ
+                            ]);
+                            if ($bitrixId) $bitrixId = $this->bxTypesMap[$object] . $bitrixId;
+                        }
+                        if (!$bitrixId || !$data['text']) continue;
+
+                        $params['FIELDS'] = [
+                            'NAME' => $data['comment_id'],
+                            'DETAIL_TEXT' => $data['text_html'],
+                            'ACTIVE_FROM' => date('d.m.Y H:i:s', strtotime($data['time_created'])),
+                            'PROPERTY_229' => $this->employeesMap[str_replace(',', '', $data['user_created'])] ?: 61,
+                            'PROPERTY_231' => $bitrixId,
+                        ];
+                        $this->add('lists.element.add', $params);
+                    }
+                    \Yii::$app->cache->set('csvCommentHistory', $i, 3600000);
+                }
+            }
+            fclose($handle);
+        }
     }
 
     public function skip($method, $data)
@@ -256,7 +309,7 @@ class MegaplanController extends Controller
                 $params['FIELDS'] = [
                     'NAME' => current(explode('.', $fileData['Name'])),
                     'PROPERTY_209' => [['VALUE' => 'n' . $result['ID']]],
-                    'PROPERTY_205' => [['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_'][$type] . $itemId],
+                    'PROPERTY_205' => [$this->bxTypesMap[$type] . $itemId],
                 ];
                 $this->add('lists.element.add', $params);
             }
@@ -374,7 +427,7 @@ class MegaplanController extends Controller
                 $result = $curl->get($url);
             }
 
-            $result = JSON::decode($result);
+            $result = json_decode($result, 1);
         } catch (Exception $e){
             Console::output('bitrix error');
             sleep(1);
