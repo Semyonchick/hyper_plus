@@ -37,9 +37,9 @@ class MegaplanController extends Controller
     ];
     public $bxTypesMap = ['company' => 'CO_', 'contact' => 'C_', 'deal' => 'D_', 'lead' => 'L_'];
     public $categoryMap = [
-        ['Продажа наших услуг', 'Аренда недвижимости', 'Продажа рекламы', 'Базовая'],
-        ['Получение комиссии'],
-        ['Продажа икры'],
+        0 => ['Продажа наших услуг', 'Аренда недвижимости', 'Продажа рекламы', 'Базовая'],
+        3 => ['Получение комиссии'],
+        1 => ['Продажа Икры'],
     ];
     public $statusMap = [
         'NEW' => ['Интерес', 'Интрес', 'Запрос', 'Начало сделки'],
@@ -75,10 +75,11 @@ class MegaplanController extends Controller
 
     public function actionTest()
     {
-//        $data = $this->get('/BumsTradeApiV01/Deal/card.api', ['Id' => 1729]);
+        $data = $this->get('/BumsCrmApiV01/Contractor/card.api', ['Id' => 1000938]);
+        $this->addClient($data);
 //        print_r($data);
 
-        var_dump($this->bx('crm.productrow.fields'));
+//        var_dump($this->bx('crm.productrow.fields'));
     }
 
     public function actionCsv()
@@ -242,15 +243,19 @@ class MegaplanController extends Controller
                 return $row['Name'];
             }, $this->get('/BumsTradeApiV01/Deal/listFields.api'))]));
 
+            $cat = key(array_filter($this->categoryMap, function ($row) use ($data) {
+                return in_array($data['Program']['Name'], $row);
+            }));
+            $stage = key(array_filter($this->statusMap, function ($row) use ($data) {
+                return in_array(trim($data['Status']['Name']), $row);
+            })) ?: $data['Status']['Name'];
+            if ($cat && $stage) $stage = "C{$cat}:{$stage}";
+
             $params += [
                 'TITLE' => $data['Name'], // Название сделки. Обязательное поле.
                 'TYPE_ID' => '', // Идентификатор типа сделки.
-                "STAGE_ID" => key(array_filter($this->statusMap, function ($row) use ($data) {
-                    return in_array(trim($data['Status']['Name']), $row);
-                })) ?: $data['Status']['Name'], // Идентификатор этапа сделки
-                "CATEGORY_ID" => key(array_filter($this->categoryMap, function ($row) use ($data) {
-                    return in_array($data['Program']['Name'], $row);
-                })), // Идентификатор направления сделки.
+                "STAGE_ID" => $stage ?: $data['Status']['Name'], // Идентификатор этапа сделки
+                "CATEGORY_ID" => $cat, // Идентификатор направления сделки.
                 "CURRENCY_ID" => $data['Cost']['CurrencyAbbreviation'], // Валюта сделки
                 "OPPORTUNITY" => $data['Cost']['Value'], // Сумма в валюте сделки
                 "COMPANY_ID" => $object == 'company' ? $clientId : '', // Идентификатор компании-контрагента сделки
@@ -267,7 +272,7 @@ class MegaplanController extends Controller
             if (in_array($params['STAGE_ID'], ['WON', 'LOSE'])) {
                 $params['CLOSEDATE'] = $data['TimeUpdated'];
             }
-            $params['TYPE_ID'] = $params['CATEGORY_ID'];
+//            $params['TYPE_ID'] = $params['CATEGORY_ID'];
 //            if ($params['CATEGORY_ID'] > 0) {
 //                var_dump($params['CATEGORY_ID']);
 //                die;
@@ -327,16 +332,26 @@ class MegaplanController extends Controller
     public function addProducts($dealId, $data)
     {
         if ($data) {
+            $exist = $this->bx('crm.deal.productrows.get', ['id' => $dealId]);
+
             $rows = [];
             foreach ($data as $row) {
                 if(empty($row['Offer']) || empty($row['DeclaredPrice'])) continue;
+                $id = $exist ? array_filter($exist, function ($item) use ($row) {
+                    return $item['PRODUCT_NAME'] == $row['Name'] && $item['PRICE'] == $row['DeclaredPrice']['Value'] && $item['QUANTITY'] == $row['Count'];
+                }) : false;
+                if ($id) $id = current($id)['ID'];
+
                 $rows[] = [
+                    'ID' => $id ?: 0,
                     'PRODUCT_ID' => 0,
                     'OWNER_ID' => 0,
                     'OWNER_TYPE' => 'Q',
                     'PRODUCT_NAME' => $row['Name'],
-                    'PRICE' => $row['DeclaredPrice']['Value'],
-                    'DISCOUNT_SUM' => $row['DiscountValue'],
+                    'PRICE' => $row['Cost']['Value'] / $row['Count'],
+                    'DISCOUNT_TYPE_ID' => 1,
+                    'DISCOUNT_SUM' => $row['DiscountValue'] / $row['Count'],
+//                    'DISCOUNT_SUM' => $row['DiscountValue'],
                     'QUANTITY' => $row['Count'],
                     'MEASURE_NAME' => $row['Offer']['Unit']['Name'],
                     'CUSTOMIZED' => 'Y',
