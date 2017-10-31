@@ -73,6 +73,14 @@ class MegaplanController extends Controller
         Console::output('Обработано ' . ($i-500 + $key) . ' контактов. Обработка заверешена.');
     }
 
+    public function actionTest()
+    {
+//        $data = $this->get('/BumsTradeApiV01/Deal/card.api', ['Id' => 1729]);
+//        print_r($data);
+
+        var_dump($this->bx('crm.productrow.fields'));
+    }
+
     public function actionCsv()
     {
         $remember = \Yii::$app->cache->get('csvCommentHistory');
@@ -328,6 +336,7 @@ class MegaplanController extends Controller
                     'OWNER_TYPE' => 'Q',
                     'PRODUCT_NAME' => $row['Name'],
                     'PRICE' => $row['DeclaredPrice']['Value'],
+                    'DISCOUNT_SUM' => $row['DiscountValue'],
                     'QUANTITY' => $row['Count'],
                     'MEASURE_NAME' => $row['Offer']['Unit']['Name'],
                     'CUSTOMIZED' => 'Y',
