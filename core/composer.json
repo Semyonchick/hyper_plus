@@ -5,6 +5,7 @@
         "mk-j/php_xlsxwriter": "^0.32.0",
         "zurb/foundation": "^6.3",
         "mpdf/mpdf": "^6.1",
+        "megaplan/simple_client": "dev-master",
         "linslin/yii2-curl": "*"
     }
 }
