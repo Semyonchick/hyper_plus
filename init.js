@@ -1,6 +1,6 @@
 requirejs.config({
     baseUrl: 'https://smartsam.ru/hyper_plus/lib',
-    urlArgs: "v=20171201-1657"
+    urlArgs: "v=20171219-1701"
 });
 
 requirejs(['datepicker', 'backup', 'crmfields', 'noanswer', 'bitrix']);
